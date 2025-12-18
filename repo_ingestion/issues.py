@@ -1,29 +1,37 @@
+import os
 import requests
 
-def fetch_issues(owner, repo, max_issues=10):
-    """
-    Fetches open GitHub issues.
-    """
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+
+def fetch_issues(owner, repo, max_issues=5):
     url = f"https://api.github.com/repos/{owner}/{repo}/issues"
-    params = {
-        "state": "open",
-        "per_page": max_issues
+
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "Authorization": f"Bearer {GITHUB_TOKEN}",
     }
 
-    response = requests.get(url, params=params)
-    response.raise_for_status()
+    params = {
+        "state": "open",
+        "per_page": max_issues,
+    }
 
-    issues = []
-    for issue in response.json():
-        if "pull_request" not in issue:
-            issues.append({
-                "number": issue["number"],
-                "title": issue["title"],
-                "body": issue["body"] or "",
-                "labels": [l["name"] for l in issue["labels"]]
-            })
+    response = requests.get(url, headers=headers, params=params, timeout=30)
 
-    return issues
+    # 👇 graceful error handling
+    if response.status_code != 200:
+        return [{
+            "title": "GitHub API Error",
+            "body": f"Status {response.status_code}: {response.text}"
+        }]
 
+    issues = response.json()
 
-
+    return [
+        {
+            "title": issue.get("title", ""),
+            "body": issue.get("body", "")
+        }
+        for issue in issues
+        if "pull_request" not in issue
+    ]
